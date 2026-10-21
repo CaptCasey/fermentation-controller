@@ -1,0 +1,14 @@
+# Live machine state, never commit these
+data/
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
+
+# Node (for the UI later)
+node_modules/
+
+# Editor / OS
+.DS_Store
+.vscode/
