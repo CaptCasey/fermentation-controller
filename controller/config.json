@@ -2,21 +2,26 @@
   "loop_interval_s": 5,
   "data_dir": "data",
   "log_interval_s": 60,
-
   "sensors": {
     "f1": "28-REPLACE_ME_F1",
     "f2": "28-REPLACE_ME_F2",
     "glycol": "28-REPLACE_ME_GLYCOL",
     "ambient": "28-REPLACE_ME_AMBIENT"
   },
-
   "ssr_active_high": true,
   "fermentors": {
-    "f1": { "label": "Fermentor 1", "pump_pin": 17, "heat_pin": 22 },
-    "f2": { "label": "Fermentor 2", "pump_pin": 27, "heat_pin": 23 }
+    "f1": {
+      "label": "Fermentor 1",
+      "pump_pin": 17,
+      "heat_pin": 22
+    },
+    "f2": {
+      "label": "Fermentor 2",
+      "pump_pin": 27,
+      "heat_pin": 23
+    }
   },
   "chiller_pin": 24,
-
   "fermentor": {
     "deadband_f": 0.5,
     "switch_lockout_s": 300,
@@ -26,7 +31,6 @@
     "alarm_band_f": 5.0,
     "alarm_delay_s": 1800
   },
-
   "chiller": {
     "default_setpoint_f": 28.0,
     "deadband_f": 1.0,
@@ -34,10 +38,14 @@
     "min_off_s": 300,
     "freeze_cutoff_f": 24.0
   },
-
   "sensor": {
     "valid_min_f": -10.0,
     "valid_max_f": 150.0,
     "timeout_s": 60
+  },
+  "profile": {
+    "count_downtime": false,
+    "max_gap_credit_s": 86400,
+    "save_interval_s": 60
   }
 }

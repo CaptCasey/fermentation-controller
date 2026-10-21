@@ -4,19 +4,23 @@
     python3 main.py --sim      # on any computer (simulated fermentors)
 
 Contract with the Node UI (all in data/):
-    command.json  Node writes (atomically), Python reads every tick.
-    status.json   Python writes (atomically) every tick, Node reads.
-    temp_log.csv  Python appends one row per log_interval_s (for graphs).
+    command.json   Node writes (atomically), Python reads every tick.
+    profiles.json  Node writes (the profile editor), Python reads when it changes.
+    status.json    Python writes (atomically) every tick, Node reads.
+    runs.json      Python's saved profile progress (Node should not edit this).
+    temp_log.csv   Python appends one row per log_interval_s (for graphs).
 """
 import argparse
 import csv
-import json
 import os
+import shutil
 import signal
 import time
 from datetime import datetime
 
 from control import Controller
+from runner import ProfileRunner
+from util import read_json, write_json_atomic
 
 DEFAULT_COMMAND = {
     "fermentors": {},          # nothing set => every fermentor is "off"
@@ -24,28 +28,14 @@ DEFAULT_COMMAND = {
 }
 
 
-def write_json_atomic(path: str, obj: dict):
-    tmp = path + ".tmp"
-    with open(tmp, "w") as fh:
-        json.dump(obj, fh, indent=2)
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.replace(tmp, path)  # atomic: readers never see a half-written file
-
-
 def load_command(path: str, last_good: dict) -> dict:
     """Read command.json; on any problem keep using the last good command."""
-    try:
-        with open(path) as fh:
-            cmd = json.load(fh)
-        if not isinstance(cmd, dict):
-            raise ValueError("command.json must be an object")
+    cmd = read_json(path, None)
+    if isinstance(cmd, dict):
         return cmd
-    except FileNotFoundError:
-        return last_good
-    except (OSError, ValueError) as exc:
-        print(f"[warn] bad command.json, keeping previous command: {exc}")
-        return last_good
+    if os.path.exists(path):
+        print("[warn] bad command.json, keeping previous command")
+    return last_good
 
 
 def main():
@@ -54,14 +44,16 @@ def main():
     ap.add_argument("--sim", action="store_true", help="use simulated hardware")
     args = ap.parse_args()
 
-    with open(args.config) as fh:
-        cfg = json.load(fh)
+    cfg = read_json(args.config)
+    if cfg is None:
+        raise SystemExit(f"cannot read {args.config}")
 
     data_dir = cfg["data_dir"]
     os.makedirs(data_dir, exist_ok=True)
     cmd_path = os.path.join(data_dir, "command.json")
     status_path = os.path.join(data_dir, "status.json")
     log_path = os.path.join(data_dir, "temp_log.csv")
+    profiles_path = os.path.join(data_dir, "profiles.json")
 
     if args.sim:
         from hardware import SimHardware
@@ -72,6 +64,8 @@ def main():
 
     if not os.path.exists(cmd_path):
         write_json_atomic(cmd_path, DEFAULT_COMMAND)
+    if not os.path.exists(profiles_path) and os.path.exists("profiles.example.json"):
+        shutil.copyfile("profiles.example.json", profiles_path)
 
     running = True
 
@@ -83,6 +77,7 @@ def main():
     signal.signal(signal.SIGTERM, stop)
 
     ctrl = Controller(cfg, time.monotonic())
+    runner = ProfileRunner(cfg, data_dir)
     command = DEFAULT_COMMAND
     interval = cfg["loop_interval_s"]
     last_log = 0.0
@@ -94,9 +89,16 @@ def main():
             tick = time.monotonic()
             command = load_command(cmd_path, command)
             temps = hw.read_temps_f()
-            outputs, status = ctrl.update(tick, temps, command)
+
+            # profiles turn into plain setpoints before the controller sees them
+            effective, profile_status = runner.resolve(tick, temps, command)
+            outputs, status = ctrl.update(tick, temps, effective)
             hw.set_outputs(outputs)
 
+            for name in profile_status["runs"]:
+                if name in status["fermentors"]:
+                    status["fermentors"][name]["mode"] = "profile"
+            status["profiles"] = profile_status
             status["ts"] = datetime.now().isoformat(timespec="seconds")
             status["uptime_s"] = int(tick - started)
             write_json_atomic(status_path, status)
@@ -120,8 +122,9 @@ def main():
 
             time.sleep(max(0.0, interval - (time.monotonic() - tick)))
     finally:
-        hw.all_off()  # whatever happens, leave everything off
-        print("controller stopped, all outputs off")
+        hw.all_off()      # whatever happens, leave everything off
+        runner.flush()    # and save profile progress
+        print("controller stopped, all outputs off, profile progress saved")
 
 
 if __name__ == "__main__":

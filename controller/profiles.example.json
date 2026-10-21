@@ -1,0 +1,19 @@
+{
+  "ale-standard": {
+    "name": "Standard Ale",
+    "steps": [
+      { "type": "hold", "temp_f": 60, "duration_h": 12 },
+      { "type": "ramp", "to_f": 72, "step_f": 1, "every_h": 1 },
+      { "type": "hold", "temp_f": 72, "duration_h": 336 },
+      { "type": "hold", "temp_f": 35, "duration_h": null }
+    ]
+  },
+  "quick-test": {
+    "name": "Quick test (about 3 hours)",
+    "steps": [
+      { "type": "hold", "temp_f": 62, "duration_h": 1 },
+      { "type": "ramp", "to_f": 65, "rate_f_per_h": 3 },
+      { "type": "hold", "temp_f": 65, "duration_h": 1, "wait_for_temp": true }
+    ]
+  }
+}
